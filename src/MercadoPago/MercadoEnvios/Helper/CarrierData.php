@@ -173,16 +173,38 @@ class CarrierData
     }
 
     /**
+     * Returns the version of Magento currently running.
+     *
+     * @return string
+     */
+    protected function getMagentoVersion() {
+        // First, try to obtain it as a property of AppInterface (2.0.x)
+        if (interface_exists('\Magento\Framework\AppInterface')) {
+            $rclass = new \ReflectionClass('\Magento\Framework\AppInterface');
+            $version = $rclass->getConstant('VERSION');
+            if ($version !== false) {
+                return $version;
+            }
+        }
+
+        // Otherwise, instantiate a ProductMetadataInterface and call getVersion() (>= 2.1.x)
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $productMetadata = $objectManager->get('Magento\Framework\App\ProductMetadataInterface');
+        return $productMetadata->getVersion();
+    }
+
+    /**
      * @return array
      */
     public function getAttributeMapping()
     {
         if (empty($this->_mapping)) {
             $mapping = $this->scopeConfig->getValue(self::XML_PATH_ATTRIBUTES_MAPPING);
-            $mapping = (array) json_decode($mapping);
+            // Since Magento 2.2.x, configuration is stored using json_encode instead of serialize
+            $mapping = version_compare($this->getMagentoVersion(), "2.2.0") < 0 ? unserialize($mapping) : json_decode($mapping, true);
             $mappingResult = [];
             foreach ($mapping as $key => $map) {
-                $mappingResult[$key] = ['code' => $map->attribute_code, 'unit' => $map->unit];
+                $mappingResult[$key] = ['code' => $map['attribute_code'], 'unit' => $map['unit']];
             }
             $this->_mapping = $mappingResult;
         }
